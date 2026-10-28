@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Remi Custom Indonesia - Multiplayer & Offline Bot</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                        serif: ['Cinzel', 'serif']
+                    },
+                    colors: {
+                        poker: {
+                            dark: '#020b06',
+                            felt: '#07331d',
+                            feltLight: '#0e4a2c',
+                            gold: '#f3c623',
+                            accent: '#e63946'
+                        }
+                    },
+                    boxShadow: {
+                        'felt': 'inset 0 0 120px rgba(0, 0, 0, 0.9)',
+                        'card': '0 6px 14px rgba(0, 0, 0, 0.45)',
+                        'gold-glow': '0 0 22px rgba(243, 198, 35, 0.85)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .bg-poker-table {
+            background: radial-gradient(circle at center, #0e4e2d 0%, #062b18 70%, #010c06 100%);
+            box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.9);
+        }
+
+        .card-element {
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease, border-color 0.2s ease;
+            user-select: none;
+            touch-action: manipulation;
+            flex-shrink: 0;
+            transform-style: preserve-3d;
+            perspective: 800px;
+        }
+
+        .card-element:hover {
+            transform: translateY(-8px) rotateX(6deg) rotateY(-4px) scale(1.04);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5), 0 0 12px rgba(243, 198, 35, 0.4);
+        }
+
+        .card-element.selected {
+            transform: translateY(-20px) scale(1.08) rotateX(4deg);
+            border-color: #f3c623 !important;
+            box-shadow: 0 0 25px rgba(243, 198, 35, 0.95), 0 14px 28px rgba(0,0,0,0.7);
+            z-index: 30 !important;
+        }
+
+        .card-element.target-discard {
+            border-color: #10b981 !important;
+            box-shadow: 0 0 22px rgba(16, 185, 129, 0.95), 0 10px 20px rgba(0,0,0,0.6);
+            transform: scale(1.08) translateY(-6px);
+            z-index: 35 !important;
+        }
+
+        .card-element.joker-card {
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            border: 2px solid #f59e0b !important;
+        }
+
+        @keyframes cardDeal {
+            0% { opacity: 0; transform: translateY(-80px) scale(0.6) rotate(-15deg); }
+            100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+        }
+
+        .animate-card-deal {
+            animation: cardDeal 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes meldDrop {
+            0% { opacity: 0; transform: scale(1.3) translateY(-25px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .animate-meld-drop {
+            animation: meldDrop 0.35s ease-out forwards;
+        }
+
+        @keyframes pulseTurn {
+            0% { box-shadow: 0 0 0 0 rgba(243, 198, 35, 0.8); }
+            70% { box-shadow: 0 0 0 10px rgba(243, 198, 35, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(243, 198, 35, 0); }
+        }
+
+        .turn-active {
+            animation: pulseTurn 1.8s infinite;
+            border-color: #f3c623 !important;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(243, 198, 35, 0.6); border-radius: 6px; }
+    </style>
+</head>
+<body class="bg-slate-950 text-white font-sans min-h-screen overflow-x-hidden flex flex-col justify-between selection:bg-poker-gold selection:text-black">
+
+    <!-- HEADER NAVBAR -->
+    <header class="bg-slate-900/95 border-b border-amber-500/30 px-3 sm:px-5 py-2.5 flex justify-between items-center z-30 backdrop-blur-md sticky top-0 shadow-lg">
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center font-serif font-bold text-slate-950 text-xl border border-yellow-200 shadow">
+                👑
+            </div>
+            <div>
+                <h1 class="font-serif font-extrabold text-amber-400 text-sm sm:text-lg tracking-wide leading-none">REMI INDONESIA</h1>
+                <p class="text-[10px] text-amber-200/70 tracking-wider uppercase font-semibold mt-0.5">Online Multiplayer & Offline AI Bot</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <div id="targetBadge" class="hidden bg-amber-950/80 border border-amber-500/40 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-300">
+                🎯 <span id="targetDisplay">300</span> Pts
+            </div>
+
+            <div id="roomBadge" class="hidden bg-emerald-950/80 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs flex items-center space-x-2">
+                <span class="text-emerald-300 font-medium hidden sm:inline">KODE:</span>
+                <span id="roomCodeDisplay" class="font-bold text-amber-400 font-mono tracking-wider">------</span>
+                <button onclick="copyRoomCode()" title="Salin Kode" class="text-emerald-400 hover:text-white transition ml-1">
+                    <i class="fa-solid fa-copy"></i>
+                </button>
+            </div>
+
+            <button id="soundBtn" onclick="toggleSound()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-800 border border-slate-700 hover:border-amber-500 text-amber-400 flex items-center justify-center transition" title="Suara">
+                <i id="soundIcon" class="fa-solid fa-volume-high"></i>
+            </button>
+
+            <button onclick="openRulesModal()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-800 border border-slate-700 hover:border-amber-500 text-amber-400 flex items-center justify-center transition" title="Aturan Game">
+                <i class="fa-solid fa-book-open"></i>
+            </button>
+
+            <button id="exitBtn" onclick="confirmLeaveRoom()" class="hidden bg-rose-800 hover:bg-rose-700 border border-rose-500/40 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition flex items-center space-x-1.5">
+                <i class="fa-solid fa-door-open"></i>
+                <span class="hidden sm:inline">Keluar</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- TOAST NOTIFICATIONS CONTAINER -->
+    <div id="toastContainer" class="fixed top-14 left-1/2 transform -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none w-11/12 max-w-md"></div>
+
+    <!-- MAIN GAME CONTAINER -->
+    <main class="flex-1 relative flex flex-col justify-between overflow-hidden bg-poker-table">
+
+        <!-- LOBBY & HOME SCREEN -->
+        <div id="lobbyScreen" class="absolute inset-0 z-40 bg-slate-950/95 flex items-center justify-center p-4 overflow-y-auto">
+            <div class="max-w-md w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-5 sm:p-6 shadow-2xl backdrop-blur-md relative my-auto">
+                <div class="text-center mb-4">
+                    <div class="inline-block p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 mb-2">
+                        <span class="text-4xl">👑🃏</span>
+                    </div>
+                    <h2 class="text-2xl font-serif font-bold text-amber-400">Remi Custom Indonesia</h2>
+                    <p class="text-slate-400 text-xs mt-0.5">Pilih Mode Bermain & Konfigurasi Room</p>
+                </div>
+
+                <!-- MODE TABS (Offline vs Online) -->
+                <div class="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800 mb-4">
+                    <button id="tabOfflineBtn" onclick="switchLobbyTab('offline')" class="py-2 rounded-lg text-xs font-extrabold transition bg-amber-500 text-slate-950 shadow">
+                        <i class="fa-solid fa-robot mr-1"></i> Main Offline
+                    </button>
+                    <button id="tabOnlineBtn" onclick="switchLobbyTab('online')" class="py-2 rounded-lg text-xs font-extrabold text-slate-400 hover:text-amber-300 transition">
+                        <i class="fa-solid fa-globe mr-1"></i> Main Online
+                    </button>
+                </div>
+
+                <div class="space-y-3 mb-4">
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1">Nama Pemain</label>
+                        <input type="text" id="playerNameInput" maxlength="12" placeholder="Nama Anda..." class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3.5 py-2 text-white text-sm focus:outline-none transition">
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1">Pilih Avatar</label>
+                        <div class="grid grid-cols-6 gap-2" id="avatarPicker"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1">Jumlah Pemain</label>
+                            <div class="grid grid-cols-3 gap-1">
+                                <button type="button" onclick="setNumPlayers(2)" id="btnPlayers2" class="player-cnt-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300">2 (8)</button>
+                                <button type="button" onclick="setNumPlayers(3)" id="btnPlayers3" class="player-cnt-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300">3 (7)</button>
+                                <button type="button" onclick="setNumPlayers(4)" id="btnPlayers4" class="player-cnt-btn py-1.5 rounded-xl border border-amber-400 bg-amber-500/20 text-[11px] font-bold text-amber-300">4 (6)</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-amber-300 uppercase tracking-wider mb-1">Target Poin Room</label>
+                            <div class="grid grid-cols-3 gap-1">
+                                <button type="button" onclick="setTargetScore(300)" id="btnTarget300" class="target-btn py-1.5 rounded-xl border border-amber-400 bg-amber-500/20 text-[11px] font-bold text-amber-300">300</button>
+                                <button type="button" onclick="setTargetScore(500)" id="btnTarget500" class="target-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300">500</button>
+                                <button type="button" onclick="setTargetScore(1000)" id="btnTarget1000" class="target-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300">1000</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OFFLINE FORM SECTION -->
+                <div id="offlineFormSection" class="space-y-2">
+                    <button onclick="startPracticeMode()" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-extrabold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center space-x-2 text-sm">
+                        <i class="fa-solid fa-play"></i>
+                        <span>Mulai Game vs Bot AI</span>
+                    </button>
+                </div>
+
+                <!-- ONLINE FORM SECTION -->
+                <div id="onlineFormSection" class="hidden space-y-2.5">
+                    <button onclick="createRoom()" class="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold py-2.5 px-4 rounded-xl shadow-lg transition flex items-center justify-center space-x-2 text-xs">
+                        <i class="fa-solid fa-plus-circle"></i>
+                        <span>Buat Ruangan Online</span>
+                    </button>
+
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="roomCodeInput" maxlength="6" placeholder="KODE RUANGAN" class="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-400 rounded-xl px-3 py-2 text-amber-400 font-mono font-bold text-center tracking-widest text-xs uppercase focus:outline-none">
+                        <button onclick="joinRoom()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold px-4 py-2 rounded-xl shadow transition text-xs flex items-center space-x-1.5">
+                            <i class="fa-solid fa-right-to-bracket"></i>
+                            <span>Gabung</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ACCORDION GUIDE ON HOME SCREEN -->
+                <div class="mt-4 border-t border-slate-800 pt-3">
+                    <button onclick="toggleAccordion('homeGuide')" class="w-full flex justify-between items-center text-xs font-bold text-amber-400 hover:text-amber-300">
+                        <span><i class="fa-solid fa-circle-info mr-1.5"></i> Ringkasan Aturan Pentung & Poin</span>
+                        <i id="homeGuideIcon" class="fa-solid fa-chevron-down transition-transform"></i>
+                    </button>
+                    <div id="homeGuide" class="hidden mt-2 bg-slate-950/80 p-3 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-1.5 leading-relaxed">
+                        <p>• <b>Joker vs As:</b> Joker SAMA SEKALI TIDAK BISA dipasangkan untuk Kartu As.</p>
+                        <p>• <b>Syarat Set As (A-A-A vs A-A-A-A):</b> Set 3 As (A-A-A) wajib ada minimal 1 meld meja sebelumnya. Set 4 As (A-A-A-A) bisa langsung diturunkan!</p>
+                        <p>• <b>Ace Lock:</b> Kartu As (A) TIDAK BISA dibuang ke Discard Pile kecuali sudah meletakkan minimal 1 meld di meja.</p>
+                        <p>• <b>Target Poin Room:</b> Pilihan 300, 500, atau 1000 Poin untuk memenangkan ruangan.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WAITING ROOM SCREEN -->
+        <div id="waitingScreen" class="hidden absolute inset-0 z-30 bg-slate-950/90 flex items-center justify-center p-4">
+            <div class="max-w-md w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl text-center">
+                <span class="text-xs font-bold text-amber-400 tracking-widest uppercase bg-amber-500/10 border border-amber-500/20 px-3 py-1 rounded-full">Ruangan Bermain</span>
+                <h2 id="waitingRoomCode" class="text-3xl font-mono font-extrabold text-amber-400 tracking-widest my-3">------</h2>
+                <p class="text-slate-400 text-xs mb-2">Target Poin Room: <b id="waitingTargetDisplay" class="text-amber-300">300 Pts</b></p>
+
+                <div class="bg-slate-950/60 rounded-xl p-3 border border-slate-800 mb-5">
+                    <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 text-left">Pemain Terhubung (<span id="playerCount">0</span>/<span id="maxPlayerCount">4</span>)</h3>
+                    <div id="waitingPlayersList" class="grid grid-cols-2 gap-2"></div>
+                </div>
+
+                <div class="flex space-x-2">
+                    <button onclick="addBotToRoom()" id="addBotBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-semibold py-2.5 rounded-xl transition text-xs">
+                        <i class="fa-solid fa-robot mr-1"></i> + Isi Bot
+                    </button>
+                    <button onclick="startGame()" id="startGameBtn" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl shadow-lg transition text-xs">
+                        <i class="fa-solid fa-play mr-1"></i> Mulai Game
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- GAMEPLAY CANVAS AREA -->
+        <div id="gamePlayArea" class="hidden flex-1 relative flex flex-col justify-between p-2 sm:p-3 min-h-0 overflow-y-auto">
+
+            <!-- OPPONENTS & VISUAL INDICATOR JOKER CARD TOP ROW -->
+            <div class="flex justify-between items-start w-full gap-2 z-10 pt-1">
+                <div id="opponentsRow" class="flex items-center space-x-2 overflow-x-auto py-1"></div>
+
+                <div id="jokerIndicatorBox" class="bg-slate-950/90 border-2 border-amber-400/80 rounded-2xl p-2 flex items-center space-x-2 shadow-lg backdrop-blur-md shrink-0">
+                    <div class="text-center">
+                        <span class="text-[9px] font-extrabold uppercase text-amber-400 block tracking-wider">INDICATOR JOKER</span>
+                        <span class="text-[10px] text-slate-300">Rank <b id="jokerRankName" class="text-amber-300">-</b> = Joker 🤡</span>
+                        <span class="text-[9px] text-amber-200/70 block">(+5 Meld / -25 Hand)</span>
+                    </div>
+                    <div id="indicatorCardSlot" class="w-11 h-16 sm:w-12 sm:h-18 bg-white rounded-lg border border-slate-300 flex flex-col justify-between p-1 text-center shadow"></div>
+                </div>
+            </div>
+
+            <!-- TABLE CENTER: TIMER, PILES & TABLE MELDS -->
+            <div class="my-2 flex flex-col items-center justify-center gap-2.5 z-10">
+
+                <div class="flex flex-col items-center gap-1.5 w-full max-w-md">
+                    <div id="turnPhaseBanner" class="bg-slate-950/90 border border-amber-500/40 px-4 py-1.5 rounded-full backdrop-blur-md shadow-lg flex items-center justify-between w-full text-xs font-bold text-amber-300">
+                        <div class="flex items-center space-x-2 truncate">
+                            <i class="fa-solid fa-hourglass-half text-amber-400"></i>
+                            <span id="turnPhaseText">FASE 1: AMBIL KARTU</span>
+                        </div>
+                        <div id="turnTimerBadge" class="bg-amber-500/20 border border-amber-400/50 px-2.5 py-0.5 rounded-full text-amber-300 font-mono text-xs flex items-center space-x-1 shrink-0">
+                            <i class="fa-regular fa-clock text-amber-400"></i>
+                            <span id="timerText">20s</span>
+                        </div>
+                    </div>
+
+                    <div class="w-full bg-slate-900 border border-slate-800 h-2 rounded-full overflow-hidden shadow-inner">
+                        <div id="timerProgressBar" class="bg-emerald-500 h-full w-full transition-all duration-1000 ease-linear"></div>
+                    </div>
+                </div>
+
+                <!-- Piles: Stock & Discard Pile Target Selector with Clear Spacing -->
+                <div class="flex items-center justify-center gap-6 sm:gap-12 my-1 flex-wrap">
+                    <div class="text-center">
+                        <div id="stockPileBtn" onclick="drawFromStock()" class="w-16 h-22 sm:w-18 sm:h-24 bg-gradient-to-br from-amber-800 to-amber-950 rounded-xl border-2 border-amber-400/80 shadow-card flex flex-col items-center justify-center cursor-pointer transform hover:-translate-y-1 transition active:scale-95 relative">
+                            <div class="absolute inset-1 border border-dashed border-amber-400/30 rounded-lg"></div>
+                            <span class="text-2xl text-amber-300">📦</span>
+                            <span id="stockCount" class="text-xs font-extrabold text-amber-200 mt-1">--</span>
+                        </div>
+                        <span class="text-[10px] uppercase font-extrabold text-amber-300 mt-1 block">Stock Pile</span>
+                    </div>
+
+                    <div class="text-center">
+                        <div id="discardPileBtn" class="min-w-[220px] sm:min-w-[280px] h-28 sm:h-32 bg-slate-950/80 rounded-2xl border-2 border-slate-700/80 shadow-card flex items-center justify-center p-3 overflow-visible">
+                            <div id="topDiscardCard" class="w-full h-full flex items-center justify-center gap-3 sm:gap-4"></div>
+                        </div>
+                        <span class="text-[10px] uppercase font-extrabold text-amber-300 mt-1 block">Discard Pile (Pilih Target Kartu)</span>
+                    </div>
+                </div>
+
+                <!-- TABLE MELDS DISPLAY CONTAINER -->
+                <div id="tableMeldsContainer" class="w-full max-w-4xl bg-slate-950/60 border border-slate-800 rounded-2xl p-2.5 backdrop-blur-sm min-h-[70px] flex items-center space-x-3 overflow-x-auto">
+                    <span class="text-xs text-slate-500 italic px-2">Belum ada Meld di Meja</span>
+                </div>
+
+                <!-- ACTION LOG -->
+                <div id="actionLog" class="text-[11px] font-semibold text-amber-300/90 bg-slate-950/80 border border-amber-500/20 px-3 py-1 rounded-full text-center max-w-lg truncate">
+                    Selamat datang di Remi Custom Indonesia!
+                </div>
+            </div>
+
+            <!-- CONTROLS & HAND DECK -->
+            <div class="w-full z-20 flex flex-col items-center gap-2">
+
+                <div class="flex items-center justify-between w-full max-w-4xl bg-slate-950/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-amber-500/30 shadow-2xl gap-2 flex-wrap sm:flex-nowrap">
+                    <div class="flex items-center space-x-1.5">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">Sort:</span>
+                        <button onclick="sortHand('suit')" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-amber-300 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+                            <span>♠♥♦♣</span>
+                            <span class="text-[10px] hidden sm:inline">Kembang</span>
+                        </button>
+                        <button onclick="sortHand('rank')" class="bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-amber-300 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-700 transition flex items-center space-x-1">
+                            <span>2-A</span>
+                            <span class="text-[10px] hidden sm:inline">Nilai</span>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <button id="btnDiscardDraw" onclick="drawFromDiscardWithMeld()" class="bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 disabled:opacity-30 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl shadow transition flex items-center space-x-1">
+                            <i class="fa-solid fa-hand"></i>
+                            <span id="lblDiscardDraw">Ambil Discard</span>
+                        </button>
+
+                        <button id="btnMeld" onclick="submitMeldFromSelected()" class="bg-amber-500 hover:bg-amber-400 active:bg-amber-600 disabled:opacity-30 text-slate-950 font-extrabold text-xs px-3 py-1.5 rounded-xl shadow transition flex items-center space-x-1">
+                            <i class="fa-solid fa-layer-group"></i>
+                            <span>Turunkan Meld</span>
+                        </button>
+
+                        <button id="btnDiscard" onclick="discardSelectedCard()" class="bg-rose-700 hover:bg-rose-600 active:bg-rose-800 disabled:opacity-30 text-white font-extrabold text-xs px-3 py-1.5 rounded-xl shadow transition flex items-center space-x-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>Buang Kartu</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="w-full max-w-4xl bg-slate-950/60 border border-slate-800/80 rounded-2xl p-2 sm:p-3 backdrop-blur-sm">
+                    <div id="myHandContainer" class="w-full flex items-center justify-start sm:justify-center min-h-[140px] px-3 py-3 gap-1.5 sm:gap-2 overflow-x-auto"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- CONFIRM DIALOG MODAL -->
+    <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-5 shadow-2xl text-center">
+            <h3 id="confirmTitle" class="font-bold text-amber-400 text-base mb-2">Konfirmasi</h3>
+            <p id="confirmMessage" class="text-xs text-slate-300 mb-5">Apakah Anda yakin?</p>
+            <div class="flex space-x-2">
+                <button id="confirmCancelBtn" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded-xl transition">Batal</button>
+                <button id="confirmOkBtn" class="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-2 rounded-xl transition">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RULES MODAL -->
+    <div id="rulesModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="max-w-lg w-full bg-slate-900 border border-amber-500/30 rounded-2xl p-6 shadow-2xl max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center pb-3 border-b border-slate-800">
+                <h3 class="font-serif font-bold text-amber-400 text-base sm:text-lg flex items-center gap-2">
+                    <i class="fa-solid fa-book-open"></i> Aturan Remi Custom Indonesia
+                </h3>
+                <button onclick="closeRulesModal()" class="text-slate-400 hover:text-white">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto py-3 text-xs text-slate-300 space-y-3 leading-relaxed">
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <h4 class="font-bold text-amber-300 mb-1">🎴 Aturan Khusus Set Kartu As (Ace)</h4>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><b>Dilarang Pakai Joker:</b> Kartu Joker SAMA SEKALI tidak boleh dijadikan pengganti Kartu As.</li>
+                        <li><b>Set 3 Kartu As (A-A-A):</b> Hanya dapat diletakkan di meja melds jika Anda SUDAH memiliki minimal 1 meld lain di meja.</li>
+                        <li><b>Set 4 Kartu As (A-A-A-A):</b> BISA LANGSUNG diletakkan ke meja kapan saja tanpa syarat meld meja!</li>
+                        <li><b>Ace Lock Discard:</b> Kartu As tidak bisa dibuang ke Discard Pile sebelum meletakkan meld di meja.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <h4 class="font-bold text-amber-300 mb-1">📥 Pengambilan Discard Pile Berdasarkan Kartu Target</h4>
+                    <p>Klik kartu yang ingin ditargetkan pada Discard Pile dan pilih 2+ kartu cocok di tangan:</p>
+                    <ul class="list-disc list-inside mt-1 text-slate-300 space-y-1">
+                        <li><b>Kartu Ke-1 (Atas):</b> Ambil 1 kartu (Ke-1 dijadikan meld ke meja).</li>
+                        <li><b>Kartu Ke-2:</b> Ambil 2 kartu. Kartu Ke-2 wajib dijadikan meld ke meja, Kartu Ke-1 masuk ke tangan.</li>
+                        <li><b>Kartu Ke-3:</b> Ambil 3 kartu. Kartu Ke-3 wajib dijadikan meld ke meja, Kartu Ke-1 & Ke-2 masuk ke tangan.</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <h4 class="font-bold text-amber-300 mb-1">📐 Kombinasi Valid (Meld)</h4>
+                    <ul class="list-disc list-inside space-y-1">
+                        <li><b>ATURAN SET KELOMPOK ANGKA TIDAK BERLAKU</b> (7-7-7 atau K-K-K dilarang).</li>
+                        <li><b>Set Khusus Kartu As (Ace):</b> Ace (15 pts) HANYA bisa dibuat Set sesama As (A-A-A / A-A-A-A).</li>
+                        <li><b>Run Angka (2–10):</b> Minimal 3 kartu berurutan kembang sama. Joker BISA digunakan.</li>
+                        <li><b>Run Gambar (J-Q-K):</b> Wajib urutan J-Q-K kembang sama. TIDAK BOLEH Pakai Joker!</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800">
+                    <h4 class="font-bold text-amber-300 mb-1">💥 Mekanisme PENTUNG & Penalti Pembuang</h4>
+                    <p>Pemain yang membuang kartu yang menyebabkan pemain lain PENTUNG akan menerima HUKUMAN PENALTI MINUS BESAR:</p>
+                    <ul class="list-disc list-inside mt-1 font-semibold text-rose-300">
+                        <li>Kartu Angka (2–10): Minus 50 Poin</li>
+                        <li>Kartu Gambar (J, Q, K): Minus 100 Poin</li>
+                        <li>Kartu As (Ace): Minus 150 Poin</li>
+                        <li>Kartu Joker: Minus 250 Poin</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button onclick="closeRulesModal()" class="mt-2 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold py-2 rounded-xl border border-slate-700 transition text-xs">
+                Saya Mengerti
+            </button>
+        </div>
+    </div>
+
+    <!-- SCOREBOARD MODAL -->
+    <div id="scoreModal" class="hidden fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-amber-500/40 rounded-2xl p-6 shadow-2xl text-center relative overflow-hidden">
+            <div id="scoreModalIcon" class="text-5xl mb-2">🏆</div>
+            <h2 id="scoreTitle" class="text-2xl font-serif font-bold text-amber-400">Ronde Selesai!</h2>
+            <p id="scoreSubtitle" class="text-slate-300 text-xs mt-1 mb-4">Ringkasan Poin Meja Meld & Tangan</p>
+
+            <div id="scoreBoardList" class="bg-slate-950/80 rounded-xl p-3 border border-slate-800 mb-5 text-left space-y-2 max-h-[220px] overflow-y-auto"></div>
+
+            <div class="flex space-x-2">
+                <button id="nextRoundBtn" onclick="nextRound()" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold py-3 px-4 rounded-xl shadow-lg transition text-xs">
+                    Lanjut Ronde Berikutnya ➡️
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FIREBASE MODULE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'remi-custom-id';
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      const firebaseConfig = {
+  apiKey: "AIzaSyBV86HgOtkw1-Xvln9e0TDqF-_h8PxZ94U",
+  authDomain: "remi-pentung.firebaseapp.com",
+  projectId: "remi-pentung",
+  storageBucket: "remi-pentung.firebasestorage.app",
+  messagingSenderId: "681775166851",
+  appId: "1:681775166851:web:ab68ff556ffed388f932b6",
+  measurementId: "G-YWX511Y0QN"
+};
+
+        let app = null, auth = null, db = null, currentUser = null, isFirebaseAvailable = false;
+
+        async function initFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                const authToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+                if (authToken) {
+                    await signInWithCustomToken(auth, authToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                currentUser = auth.currentUser;
+                if (currentUser) {
+                    isFirebaseAvailable = true;
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        isFirebaseAvailable = true;
+                    }
+                });
+            } catch (e) {
+                console.warn("Firebase Auth/Firestore init fallback:", e);
+                isFirebaseAvailable = false;
+            }
+        }
+
+        const authPromise = initFirebase();
+
+        window.firebaseDb = () => db;
+        window.appId = appId;
+        window.getAuthUser = () => currentUser || { uid: 'user_' + Math.random().toString(36).substring(2, 8) };
+        window.isFirebaseReady = () => isFirebaseAvailable;
+        window.awaitAuth = () => authPromise;
+    </script>
+
+    <!-- GAME ENGINE & CUSTOM INDONESIAN RULES -->
+    <script>
+        // WEB AUDIO SYNTHESIZER
+        class SoundEngine {
+            constructor() { this.ctx = null; this.muted = false; }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+            }
+            playFlip() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(280, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(70, this.ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.08);
+                } catch(e){}
+            }
+            playDiscard() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+                } catch(e){}
+            }
+            playMeld() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(554.37, now + 0.08);
+                    osc.frequency.setValueAtTime(659.25, now + 0.16);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now); osc.stop(now + 0.3);
+                } catch(e){}
+            }
+            playPentung() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(600, now + 0.3);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now); osc.stop(now + 0.4);
+                } catch(e){}
+            }
+            playWin() {
+                if (this.muted || !this.ctx) return;
+                try {
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        const start = this.ctx.currentTime + (i * 0.12);
+                        osc.frequency.setValueAtTime(freq, start);
+                        gain.gain.setValueAtTime(0.3, start);
+                        gain.gain.exponentialRampToValueAtTime(0.01, start + 0.4);
+                        osc.connect(gain); gain.connect(this.ctx.destination);
+                        osc.start(start); osc.stop(start + 0.4);
+                    });
+                } catch(e){}
+            }
+        }
+
+        const audio = new SoundEngine();
+        function toggleSound() {
+            audio.init();
+            audio.muted = !audio.muted;
+            document.getElementById('soundIcon').className = audio.muted ? 'fa-solid fa-volume-xmark text-slate-500' : 'fa-solid fa-volume-high text-amber-400';
+        }
+
+        // CONSTANTS & HELPERS
+        const SUITS = [
+            { id: 'C', symbol: '♣', name: 'Keriting', color: 'text-slate-900' },
+            { id: 'D', symbol: '♦', name: 'Wajik', color: 'text-rose-600' },
+            { id: 'H', symbol: '♥', name: 'Hati', color: 'text-rose-600' },
+            { id: 'S', symbol: '♠', name: 'Sekop', color: 'text-slate-900' }
+        ];
+
+        const RANKS = [
+            { val: 2, label: '2', pts: 5 },
+            { val: 3, label: '3', pts: 5 },
+            { val: 4, label: '4', pts: 5 },
+            { val: 5, label: '5', pts: 5 },
+            { val: 6, label: '6', pts: 5 },
+            { val: 7, label: '7', pts: 5 },
+            { val: 8, label: '8', pts: 5 },
+            { val: 9, label: '9', pts: 5 },
+            { val: 10, label: '10', pts: 5 },
+            { val: 11, label: 'J', pts: 10 },
+            { val: 12, label: 'Q', pts: 10 },
+            { val: 13, label: 'K', pts: 10 },
+            { val: 14, label: 'A', pts: 15 }
+        ];
+
+        const AVATARS = ['😎', '🤠', '🦊', '🐯', '👑', '🎲', '🦁', '🤖', '👾', '🔥', '🥷', '🦄'];
+
+        let state = {
+            numPlayers: 4,
+            targetScore: 300,
+            myPlayerId: '',
+            selectedAvatar: '😎',
+            roomCode: '',
+            isMultiplayer: false,
+            selectedCardIds: [],
+            selectedDiscardIndex: 0, // 0 = Ke-1 (Atas), 1 = Ke-2, 2 = Ke-3
+            unsubscribeRoom: null,
+            localRoomState: null,
+            turnTimer: null,
+            turnTimeRemaining: 20,
+            lastTurnKey: ''
+        };
+
+        // UI NOTIFICATIONS & MODALS
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            let bg = 'bg-slate-900 border-amber-500/50 text-amber-300';
+            if (type === 'error') bg = 'bg-rose-950 border-rose-500/80 text-rose-200';
+            if (type === 'success') bg = 'bg-emerald-950 border-emerald-500/80 text-emerald-200';
+
+            toast.className = `p-3 rounded-xl border shadow-xl text-xs font-semibold flex items-center justify-between gap-2 transform transition-all duration-300 translate-y-[-10px] opacity-0 pointer-events-auto ${bg}`;
+            toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>`;
+            
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            }, 10);
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 3500);
+        }
+
+        function showConfirmModal(title, message, onOk) {
+            const modal = document.getElementById('confirmModal');
+            document.getElementById('confirmTitle').innerText = title;
+            document.getElementById('confirmMessage').innerText = message;
+            
+            const okBtn = document.getElementById('confirmOkBtn');
+            const cancelBtn = document.getElementById('confirmCancelBtn');
+
+            const cleanup = () => {
+                modal.classList.add('hidden');
+                okBtn.onclick = null;
+                cancelBtn.onclick = null;
+            };
+
+            okBtn.onclick = () => { cleanup(); onOk(); };
+            cancelBtn.onclick = () => { cleanup(); };
+            modal.classList.remove('hidden');
+        }
+
+        function openRulesModal() { document.getElementById('rulesModal').classList.remove('hidden'); }
+        function closeRulesModal() { document.getElementById('rulesModal').classList.add('hidden'); }
+
+        function toggleAccordion(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById(id + 'Icon');
+            if (el) el.classList.toggle('hidden');
+            if (icon) icon.classList.toggle('rotate-180');
+        }
+
+        // CARD RENDER HELPERS
+        function getCardLabel(card) {
+            if (!card) return '-';
+            const r = RANKS.find(x => x.val === card.val);
+            return r ? r.label : card.val;
+        }
+
+        function getCardSymbol(card) {
+            if (!card) return '';
+            const s = SUITS.find(x => x.id === card.suit);
+            return s ? s.symbol : card.suit;
+        }
+
+        function getCardColorClass(card) {
+            if (!card) return 'text-slate-900';
+            const s = SUITS.find(x => x.id === card.suit);
+            return s ? s.color : 'text-slate-900';
+        }
+
+        function renderCardInnerHTML(card) {
+            if (!card) return '';
+            const label = getCardLabel(card);
+            const symbol = getCardSymbol(card);
+            const colorClass = getCardColorClass(card);
+
+            if (card.isJoker) {
+                return `
+                    <div class="flex justify-between items-start text-amber-600 font-bold text-xs">
+                        <span>🤡</span>
+                        <span class="text-[9px]">JK</span>
+                    </div>
+                    <div class="text-center text-amber-600 font-black text-xs my-auto leading-tight">
+                        <span>${label}${symbol}</span>
+                        <span class="block text-[8px]">JOKER</span>
+                    </div>
+                    <div class="flex justify-between items-end text-amber-600 font-bold text-xs">
+                        <span class="text-[9px]">JK</span>
+                        <span>🤡</span>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="flex justify-between items-start ${colorClass} font-extrabold text-xs">
+                    <span>${label}</span>
+                    <span class="text-[10px]">${symbol}</span>
+                </div>
+                <div class="text-center ${colorClass} text-base sm:text-lg font-black my-auto">
+                    ${symbol}
+                </div>
+                <div class="flex justify-between items-end ${colorClass} font-extrabold text-xs transform rotate-180">
+                    <span>${label}</span>
+                    <span class="text-[10px]">${symbol}</span>
+                </div>
+            `;
+        }
+
+        function renderCardHTML(card, isSelected = false, extraSize = 'w-14 h-20 sm:w-16 sm:h-24', isNew = false) {
+            const isJoker = card.isJoker;
+            return `
+                <div class="card-element ${extraSize} bg-white rounded-xl shadow-card flex flex-col justify-between p-1.5 select-none relative cursor-pointer border border-slate-300 ${isSelected ? 'selected' : ''} ${isJoker ? 'joker-card' : ''}">
+                    ${isNew ? '<span class="absolute -top-2 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[8px] font-black px-1.5 py-0.2 rounded-full border border-white shadow z-20">BARU</span>' : ''}
+                    ${renderCardInnerHTML(card)}
+                </div>
+            `;
+        }
+
+        // HOME / LOBBY SETUP FUNCTIONS
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedName = localStorage.getItem('remi_player_name');
+            if (savedName) {
+                document.getElementById('playerNameInput').value = savedName;
+            } else {
+                document.getElementById('playerNameInput').value = 'Pemain_' + Math.floor(1000 + Math.random() * 9000);
+            }
+
+            renderAvatarPicker();
+            setNumPlayers(4);
+            setTargetScore(300);
+        });
+
+        function renderAvatarPicker() {
+            const picker = document.getElementById('avatarPicker');
+            if (!picker) return;
+            picker.innerHTML = AVATARS.map(av => `
+                <button type="button" onclick="selectAvatar('${av}')" class="avatar-option p-2 rounded-xl border ${av === state.selectedAvatar ? 'border-amber-400 bg-amber-500/20 scale-105' : 'border-slate-800 bg-slate-950 hover:border-slate-700'} text-xl transition flex items-center justify-center">
+                    ${av}
+                </button>
+            `).join('');
+        }
+
+        function selectAvatar(av) {
+            state.selectedAvatar = av;
+            renderAvatarPicker();
+        }
+
+        function setNumPlayers(n) {
+            state.numPlayers = n;
+            [2, 3, 4].forEach(val => {
+                const btn = document.getElementById(`btnPlayers${val}`);
+                if (btn) {
+                    if (val === n) {
+                        btn.className = 'player-cnt-btn py-1.5 rounded-xl border border-amber-400 bg-amber-500/20 text-[11px] font-bold text-amber-300';
+                    } else {
+                        btn.className = 'player-cnt-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300';
+                    }
+                }
+            });
+        }
+
+        function setTargetScore(ts) {
+            state.targetScore = ts;
+            [300, 500, 1000].forEach(val => {
+                const btn = document.getElementById(`btnTarget${val}`);
+                if (btn) {
+                    if (val === ts) {
+                        btn.className = 'target-btn py-1.5 rounded-xl border border-amber-400 bg-amber-500/20 text-[11px] font-bold text-amber-300';
+                    } else {
+                        btn.className = 'target-btn py-1.5 rounded-xl border border-slate-700 bg-slate-800 text-[11px] font-bold text-slate-300';
+                    }
+                }
+            });
+            document.getElementById('targetDisplay').innerText = ts;
+            document.getElementById('waitingTargetDisplay').innerText = ts + ' Pts';
+        }
+
+        function switchLobbyTab(tab) {
+            const offlineBtn = document.getElementById('tabOfflineBtn');
+            const onlineBtn = document.getElementById('tabOnlineBtn');
+            const offlineSection = document.getElementById('offlineFormSection');
+            const onlineSection = document.getElementById('onlineFormSection');
+
+            if (tab === 'offline') {
+                offlineBtn.className = 'py-2 rounded-lg text-xs font-extrabold transition bg-amber-500 text-slate-950 shadow';
+                onlineBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-400 hover:text-amber-300 transition';
+                offlineSection.classList.remove('hidden');
+                onlineSection.classList.add('hidden');
+                state.isMultiplayer = false;
+            } else {
+                onlineBtn.className = 'py-2 rounded-lg text-xs font-extrabold transition bg-amber-500 text-slate-950 shadow';
+                offlineBtn.className = 'py-2 rounded-lg text-xs font-extrabold text-slate-400 hover:text-amber-300 transition';
+                onlineSection.classList.remove('hidden');
+                offlineSection.classList.add('hidden');
+                state.isMultiplayer = true;
+            }
+        }
+
+        function getPlayerName() {
+            const input = document.getElementById('playerNameInput');
+            let name = input ? input.value.trim() : '';
+            if (!name) name = 'Pemain_' + Math.floor(1000 + Math.random() * 9000);
+            localStorage.setItem('remi_player_name', name);
+            return name;
+        }
+
+        // DECK CREATION & DEALING
+        function createDeck() {
+            let deck = [];
+            let cardId = 1;
+
+            SUITS.forEach(suit => {
+                RANKS.forEach(rank => {
+                    deck.push({
+                        id: 'C_' + cardId++,
+                        suit: suit.id,
+                        symbol: suit.symbol,
+                        color: suit.color,
+                        val: rank.val,
+                        label: rank.label,
+                        pts: rank.pts,
+                        isJoker: false
+                    });
+                });
+            });
+
+            // Shuffle deck
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+
+            return deck;
+        }
+
+        function getHandCardCount(numPlayers) {
+            if (numPlayers === 2) return 8;
+            if (numPlayers === 3) return 7;
+            return 6; // 4 Players
+        }
+
+        // START OFFLINE GAME VS AI BOTS
+        function startPracticeMode() {
+            audio.init();
+            const name = getPlayerName();
+            state.myPlayerId = 'P_LOCAL_ME';
+            state.isMultiplayer = false;
+
+            const numPlayers = state.numPlayers;
+            let players = [
+                { id: state.myPlayerId, name: name, avatar: state.selectedAvatar, isBot: false, hand: [] }
+            ];
+
+            const botAvatars = ['🤖', '🦊', '🐯', '👾', '🦁', '🤠'];
+            for (let i = 1; i < numPlayers; i++) {
+                players.push({
+                    id: 'BOT_' + i,
+                    name: 'Bot ' + i,
+                    avatar: botAvatars[(i - 1) % botAvatars.length],
+                    isBot: true,
+                    hand: []
+                });
+            }
+
+            initializeGameRoom(players, state.targetScore);
+        }
+
+        function initializeGameRoom(players, targetScore) {
+            let deck = createDeck();
+
+            // Set Indicator Joker
+            const indicatorCard = deck.pop();
+            const jokerRankVal = indicatorCard.val;
+
+            // Mark all matching ranks in deck & indicator as Joker
+            deck.forEach(c => {
+                if (c.val === jokerRankVal) c.isJoker = true;
+            });
+
+            // Deal cards
+            const cardsPerPlayer = getHandCardCount(players.length);
+            players.forEach(p => {
+                p.hand = deck.splice(0, cardsPerPlayer);
+            });
+
+            // Discard pile start card
+            const firstDiscard = deck.pop();
+
+            let room = {
+                roomCode: 'OFFLINE',
+                numPlayers: players.length,
+                targetScore: targetScore,
+                roundNumber: 1,
+                players: players,
+                stock: deck,
+                discardPile: [firstDiscard],
+                tableMelds: [],
+                indicatorJoker: indicatorCard,
+                turnIndex: 0,
+                turnPhase: 'DRAW',
+                lastDiscarderId: null,
+                actionLog: `Game dimulai! Giliran ${players[0].name}.`,
+                status: 'PLAYING',
+                scores: {}
+            };
+
+            players.forEach(p => { room.scores[p.id] = 0; });
+
+            state.localRoomState = room;
+            document.getElementById('lobbyScreen').classList.add('hidden');
+            document.getElementById('waitingScreen').classList.add('hidden');
+            document.getElementById('gamePlayArea').classList.remove('hidden');
+            document.getElementById('exitBtn').classList.remove('hidden');
+            document.getElementById('targetBadge').classList.remove('hidden');
+
+            renderRoomUI(room);
+        }
+
+        // ONLINE MULTIPLAYER (FIREBASE ROOMS WITH RESILIENT FALLBACK)
+        async function createRoom() {
+            audio.init();
+            const name = getPlayerName();
+            const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+            state.roomCode = roomCode;
+            state.isMultiplayer = true;
+
+            // Ensure Firebase Auth is ready
+            await window.awaitAuth();
+
+            const isReady = window.isFirebaseReady();
+            const authUser = window.getAuthUser();
+            state.myPlayerId = authUser.uid;
+
+            const roomData = {
+                roomCode: roomCode,
+                numPlayers: state.numPlayers,
+                targetScore: state.targetScore,
+                roundNumber: 1,
+                hostId: state.myPlayerId,
+                players: [{ id: state.myPlayerId, name: name, avatar: state.selectedAvatar, isBot: false, hand: [] }],
+                stock: [],
+                discardPile: [],
+                tableMelds: [],
+                indicatorJoker: null,
+                turnIndex: 0,
+                turnPhase: 'WAITING',
+                status: 'LOBBY',
+                actionLog: 'Ruangan dibuat. Menunggu pemain...',
+                scores: {}
+            };
+
+            state.localRoomState = roomData;
+
+            if (isReady && window.firebaseDb()) {
+                try {
+                    const db = window.firebaseDb();
+                    // CRITICAL RULE 1: Correct path structure `/artifacts/${appId}/public/data/${collectionName}`
+                    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    const roomRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', roomCode);
+                    await setDoc(roomRef, roomData);
+                    listenToRoom(roomCode);
+                    showToast("Ruangan Online Terhubung!", 'success');
+                } catch (err) {
+                    console.warn("Firestore error on createRoom, switching to local mode:", err);
+                    showToast("Mode Simulasi Room Aktif", 'info');
+                }
+            } else {
+                showToast("Mode Simulasi Online Aktif (Lokal)", 'info');
+            }
+
+            document.getElementById('lobbyScreen').classList.add('hidden');
+            document.getElementById('waitingScreen').classList.remove('hidden');
+            document.getElementById('waitingRoomCode').innerText = roomCode;
+            document.getElementById('roomBadge').classList.remove('hidden');
+            document.getElementById('roomCodeDisplay').innerText = roomCode;
+
+            updateLobbyUI(roomData);
+        }
+
+        async function joinRoom() {
+            audio.init();
+            const codeInput = document.getElementById('roomCodeInput');
+            const roomCode = codeInput ? codeInput.value.trim().toUpperCase() : '';
+            if (!roomCode) {
+                showToast("Masukkan Kode Ruangan!", 'error');
+                return;
+            }
+
+            await window.awaitAuth();
+            const name = getPlayerName();
+            const authUser = window.getAuthUser();
+            state.myPlayerId = authUser.uid;
+            state.roomCode = roomCode;
+            state.isMultiplayer = true;
+
+            if (window.isFirebaseReady() && window.firebaseDb()) {
+                try {
+                    const db = window.firebaseDb();
+                    const { doc, getDoc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    const roomRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', roomCode);
+                    const snap = await getDoc(roomRef);
+
+                    if (!snap.exists()) {
+                        showToast("Ruangan tidak ditemukan!", 'error');
+                        return;
+                    }
+
+                    let room = snap.data();
+                    if (room.status !== 'LOBBY') {
+                        showToast("Permainan sudah berjalan!", 'error');
+                        return;
+                    }
+
+                    if (room.players.length >= room.numPlayers) {
+                        showToast("Ruangan sudah penuh!", 'error');
+                        return;
+                    }
+
+                    if (!room.players.some(p => p.id === state.myPlayerId)) {
+                        room.players.push({ id: state.myPlayerId, name: name, avatar: state.selectedAvatar, isBot: false, hand: [] });
+                        await updateDoc(roomRef, { players: room.players });
+                    }
+
+                    listenToRoom(roomCode);
+                    state.localRoomState = room;
+                    showToast("Berhasil Bergabung ke Room!", 'success');
+                } catch (e) {
+                    console.warn("Join room error:", e);
+                    showToast("Gagal terhubung ke room database.", 'error');
+                    return;
+                }
+            } else {
+                // Fallback join simulation
+                let room = state.localRoomState || {
+                    roomCode: roomCode,
+                    numPlayers: state.numPlayers,
+                    targetScore: state.targetScore,
+                    roundNumber: 1,
+                    hostId: 'HOST_SIM',
+                    players: [{ id: 'HOST_SIM', name: 'Host Game', avatar: '👑', isBot: false, hand: [] }],
+                    status: 'LOBBY',
+                    scores: {}
+                };
+                if (!room.players.some(p => p.id === state.myPlayerId)) {
+                    room.players.push({ id: state.myPlayerId, name: name, avatar: state.selectedAvatar, isBot: false, hand: [] });
+                }
+                state.localRoomState = room;
+            }
+
+            document.getElementById('lobbyScreen').classList.add('hidden');
+            document.getElementById('waitingScreen').classList.remove('hidden');
+            document.getElementById('waitingRoomCode').innerText = roomCode;
+            document.getElementById('roomBadge').classList.remove('hidden');
+            document.getElementById('roomCodeDisplay').innerText = roomCode;
+
+            updateLobbyUI(state.localRoomState);
+        }
+
+        async function listenToRoom(roomCode) {
+            if (!window.isFirebaseReady() || !window.firebaseDb()) return;
+
+            try {
+                const db = window.firebaseDb();
+                const { doc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                const roomRef = doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', roomCode);
+
+                if (state.unsubscribeRoom) state.unsubscribeRoom();
+
+                state.unsubscribeRoom = onSnapshot(roomRef, (docSnap) => {
+                    if (!docSnap.exists()) return;
+                    const room = docSnap.data();
+                    state.localRoomState = room;
+
+                    if (room.status === 'LOBBY') {
+                        updateLobbyUI(room);
+                    } else if (room.status === 'PLAYING') {
+                        document.getElementById('waitingScreen').classList.add('hidden');
+                        document.getElementById('gamePlayArea').classList.remove('hidden');
+                        document.getElementById('exitBtn').classList.remove('hidden');
+                        renderRoomUI(room);
+                    }
+                }, (error) => {
+                    console.error("Room sync error:", error);
+                    showToast("Sinkronisasi real-time mengalami kendala.", 'error');
+                });
+            } catch (e) {
+                console.warn("Listen room error:", e);
+            }
+        }
+
+        function updateLobbyUI(room) {
+            if (!room) return;
+            document.getElementById('playerCount').innerText = room.players ? room.players.length : 0;
+            document.getElementById('maxPlayerCount').innerText = room.numPlayers || 4;
+            document.getElementById('waitingTargetDisplay').innerText = (room.targetScore || 300) + ' Pts';
+
+            const list = document.getElementById('waitingPlayersList');
+            if (list && room.players) {
+                list.innerHTML = room.players.map(p => `
+                    <div class="bg-slate-900 border border-slate-800 p-2.5 rounded-xl flex items-center space-x-2">
+                        <span class="text-2xl">${p.avatar}</span>
+                        <div class="text-left">
+                            <p class="text-xs font-bold text-amber-300 truncate">${p.name}</p>
+                            <p class="text-[10px] text-slate-400">${p.id === room.hostId ? '👑 Host' : (p.isBot ? '🤖 Bot' : 'Pemain')}</p>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            const isHost = room.hostId === state.myPlayerId || !room.hostId;
+            document.getElementById('addBotBtn').style.display = isHost ? 'block' : 'none';
+            document.getElementById('startGameBtn').style.display = isHost ? 'block' : 'none';
+        }
+
+        async function addBotToRoom() {
+            let room = state.localRoomState;
+            if (!room || room.players.length >= room.numPlayers) return;
+
+            const botAvatars = ['🤖', '🦊', '🐯', '👾'];
+            const botIdx = room.players.length;
+            room.players.push({
+                id: 'BOT_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                name: 'Bot ' + botIdx,
+                avatar: botAvatars[(botIdx - 1) % botAvatars.length],
+                isBot: true,
+                hand: []
+            });
+
+            if (state.isMultiplayer && window.isFirebaseReady() && window.firebaseDb()) {
+                try {
+                    const db = window.firebaseDb();
+                    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    await updateDoc(doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', state.roomCode), {
+                        players: room.players
+                    });
+                } catch (e) {
+                    console.warn("Add bot firestore error:", e);
+                    updateLobbyUI(room);
+                }
+            } else {
+                updateLobbyUI(room);
+            }
+        }
+
+        async function startGame() {
+            let room = state.localRoomState;
+            if (!room) return;
+
+            let deck = createDeck();
+            const indicatorCard = deck.pop();
+            const jokerRankVal = indicatorCard.val;
+
+            deck.forEach(c => {
+                if (c.val === jokerRankVal) c.isJoker = true;
+            });
+
+            const cardsPerPlayer = getHandCardCount(room.players.length);
+            room.players.forEach(p => {
+                p.hand = deck.splice(0, cardsPerPlayer);
+            });
+
+            const firstDiscard = deck.pop();
+
+            room.stock = deck;
+            room.discardPile = [firstDiscard];
+            room.tableMelds = [];
+            room.indicatorJoker = indicatorCard;
+            room.turnIndex = 0;
+            room.turnPhase = 'DRAW';
+            room.status = 'PLAYING';
+            room.actionLog = `Game dimulai! Giliran ${room.players[0].name}.`;
+
+            if (!room.scores) {
+                room.scores = {};
+                room.players.forEach(p => room.scores[p.id] = 0);
+            }
+
+            if (state.isMultiplayer && window.isFirebaseReady() && window.firebaseDb()) {
+                try {
+                    const db = window.firebaseDb();
+                    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    await setDoc(doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', state.roomCode), room);
+                } catch (e) {
+                    console.warn("Start game firestore error:", e);
+                    document.getElementById('waitingScreen').classList.add('hidden');
+                    document.getElementById('gamePlayArea').classList.remove('hidden');
+                    document.getElementById('exitBtn').classList.remove('hidden');
+                    renderRoomUI(room);
+                }
+            } else {
+                document.getElementById('waitingScreen').classList.add('hidden');
+                document.getElementById('gamePlayArea').classList.remove('hidden');
+                document.getElementById('exitBtn').classList.remove('hidden');
+                renderRoomUI(room);
+            }
+        }
+
+        async function updateRoomState(room) {
+            state.localRoomState = room;
+            if (state.isMultiplayer && window.isFirebaseReady() && window.firebaseDb()) {
+                try {
+                    const db = window.firebaseDb();
+                    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js");
+                    await setDoc(doc(db, 'artifacts', window.appId, 'public', 'data', 'remi_rooms', state.roomCode), room);
+                } catch (e) {
+                    console.warn("Update room state error:", e);
+                    renderRoomUI(room);
+                }
+            } else {
+                renderRoomUI(room);
+            }
+        }
+
+        // RENDER ROOM UI
+        function renderRoomUI(room) {
+            if (!room) return;
+
+            // Visual Indicator Joker Card
+            if (room.indicatorJoker) {
+                document.getElementById('jokerRankName').innerText = getCardLabel(room.indicatorJoker);
+                const slot = document.getElementById('indicatorCardSlot');
+                slot.innerHTML = renderCardInnerHTML(room.indicatorJoker);
+            }
+
+            // Target Display
+            document.getElementById('targetDisplay').innerText = room.targetScore;
+
+            // Render Opponents
+            renderOpponents(room);
+
+            // Render Stock Count & Discard Pile
+            document.getElementById('stockCount').innerText = room.stock ? room.stock.length : 0;
+            renderDiscardPile(room);
+
+            // Render Table Melds
+            renderTableMelds(room);
+
+            // Render My Hand
+            renderMyHand(room);
+
+            // Turn Phase Banner & Controls
+            const activePlayer = room.players[room.turnIndex];
+            const isMyTurn = activePlayer && activePlayer.id === state.myPlayerId;
+
+            let phaseText = `GILIRAN: ${activePlayer ? activePlayer.name : '-'}`;
+            if (isMyTurn) {
+                phaseText = room.turnPhase === 'DRAW' ? 'FASE 1: AMBIL KARTU (Stock / Discard)' : 'FASE 2: TURUNKAN MELD ATAU BUANG KARTU';
+            }
+            document.getElementById('turnPhaseText').innerText = phaseText;
+
+            // Update Turn Timer Key & Reset Timer if changed
+            const turnKey = room.turnIndex + '_' + room.turnPhase + '_' + (room.discardPile ? room.discardPile.length : 0);
+            if (state.lastTurnKey !== turnKey) {
+                state.lastTurnKey = turnKey;
+                resetTurnTimer();
+            }
+
+            // Action Log
+            document.getElementById('actionLog').innerText = room.actionLog || '';
+
+            // Handle Bot Turn if local or host
+            if (activePlayer && activePlayer.isBot && room.status === 'PLAYING') {
+                setTimeout(() => handleBotTurn(activePlayer), 1200);
+            }
+        }
+
+        function renderOpponents(room) {
+            const container = document.getElementById('opponentsRow');
+            if (!container) return;
+
+            const opponents = room.players.filter(p => p.id !== state.myPlayerId);
+            container.innerHTML = opponents.map(opp => {
+                const isActive = room.players[room.turnIndex]?.id === opp.id;
+                const score = room.scores ? (room.scores[opp.id] || 0) : 0;
+
+                return `
+                    <div class="bg-slate-950/90 border-2 ${isActive ? 'turn-active border-amber-400 bg-amber-500/10' : 'border-slate-800'} p-2 rounded-xl flex items-center space-x-2 shrink-0 shadow-lg backdrop-blur-md">
+                        <span class="text-2xl">${opp.avatar}</span>
+                        <div>
+                            <div class="flex items-center space-x-1">
+                                <span class="text-xs font-bold text-amber-300 truncate max-w-[80px]">${opp.name}</span>
+                                ${isActive ? '<span class="text-[9px] bg-amber-500 text-slate-950 px-1 rounded font-black">GILIRAN</span>' : ''}
+                            </div>
+                            <p class="text-[10px] text-slate-400">🃏 ${opp.hand ? opp.hand.length : 0} Kartu | <b class="text-amber-400">${score} Pts</b></p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderDiscardPile(room) {
+            const pileContainer = document.getElementById('topDiscardCard');
+            if (!pileContainer) return;
+
+            if (!room.discardPile || room.discardPile.length === 0) {
+                pileContainer.innerHTML = `<span class="text-xs text-slate-500 italic">Kosong</span>`;
+                return;
+            }
+
+            const visibleCards = room.discardPile.slice(-3); // Get top 3 cards
+            pileContainer.innerHTML = visibleCards.map((card, idx) => {
+                const pilePosIndex = visibleCards.length - 1 - idx; // 0 = top (Ke-1), 1 = Ke-2, 2 = Ke-3
+                const isSelectedTarget = state.selectedDiscardIndex === pilePosIndex;
+
+                const targetLabel = pilePosIndex === 0 ? 'Ke-1' : (pilePosIndex === 1 ? 'Ke-2' : 'Ke-3');
+
+                return `
+                    <div onclick="selectDiscardTarget(${pilePosIndex})" class="relative transition-all duration-200 cursor-pointer ${isSelectedTarget ? 'scale-110 z-30' : 'z-10 hover:scale-105 hover:z-20'}">
+                        <div class="card-element ${isSelectedTarget ? 'target-discard ring-4 ring-emerald-400' : ''} w-14 h-20 sm:w-16 sm:h-24 bg-white rounded-xl shadow-md flex flex-col justify-between p-1.5 select-none relative border border-slate-300">
+                            <span class="absolute -top-2 left-1/2 transform -translate-x-1/2 ${isSelectedTarget ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-amber-300'} text-[8px] font-extrabold px-1.5 py-0.2 rounded-full border border-amber-400 shadow z-20 whitespace-nowrap">
+                                ${targetLabel}
+                            </span>
+                            ${renderCardInnerHTML(card)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectDiscardTarget(targetIdx) {
+            state.selectedDiscardIndex = targetIdx;
+            audio.playFlip();
+            renderDiscardPile(state.localRoomState);
+        }
+
+        function renderTableMelds(room) {
+            const container = document.getElementById('tableMeldsContainer');
+            if (!container) return;
+
+            if (!room.tableMelds || room.tableMelds.length === 0) {
+                container.innerHTML = `<span class="text-xs text-slate-500 italic px-2">Belum ada Meld di Meja</span>`;
+                return;
+            }
+
+            container.innerHTML = room.tableMelds.map((meld, mIdx) => {
+                const owner = room.players.find(p => p.id === meld.ownerId);
+                const ownerName = owner ? owner.name : 'Pemain';
+
+                return `
+                    <div class="bg-slate-900 border border-amber-500/30 rounded-xl p-2 shrink-0 flex flex-col gap-1 shadow-md">
+                        <div class="flex justify-between items-center text-[10px] text-amber-400 font-bold px-1">
+                            <span>Meld #${mIdx + 1} (${ownerName})</span>
+                            <span class="text-slate-400 font-mono text-[9px]">${meld.type}</span>
+                        </div>
+                        <div class="flex space-x-1">
+                            ${meld.cards.map(c => renderCardHTML(c, false, 'w-10 h-14 text-[10px]')).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderMyHand(room) {
+            const container = document.getElementById('myHandContainer');
+            if (!container) return;
+
+            const me = room.players.find(p => p.id === state.myPlayerId);
+            if (!me || !me.hand) {
+                container.innerHTML = `<span class="text-xs text-slate-500">Tangan Kosong</span>`;
+                return;
+            }
+
+            container.innerHTML = me.hand.map(card => {
+                const isSelected = state.selectedCardIds.includes(card.id);
+                return `
+                    <div onclick="toggleCardSelection('${card.id}')">
+                        ${renderCardHTML(card, isSelected, 'w-14 h-20 sm:w-16 sm:h-24', card.justDrawn)}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleCardSelection(cardId) {
+            const idx = state.selectedCardIds.indexOf(cardId);
+            if (idx > -1) {
+                state.selectedCardIds.splice(idx, 1);
+            } else {
+                state.selectedCardIds.push(cardId);
+            }
+            audio.playFlip();
+            renderMyHand(state.localRoomState);
+        }
+
+        function sortHand(type) {
+            let room = state.localRoomState;
+            const me = room ? room.players.find(p => p.id === state.myPlayerId) : null;
+            if (!me || !me.hand) return;
+
+            if (type === 'suit') {
+                const suitOrder = { 'C': 1, 'D': 2, 'H': 3, 'S': 4 };
+                me.hand.sort((a, b) => {
+                    if (suitOrder[a.suit] !== suitOrder[b.suit]) return suitOrder[a.suit] - suitOrder[b.suit];
+                    return a.val - b.val;
+                });
+            } else {
+                me.hand.sort((a, b) => a.val - b.val);
+            }
+
+            audio.playFlip();
+            renderMyHand(room);
+        }
+
+        // DRAW FROM STOCK PILE
+        function drawFromStock() {
+            let room = state.localRoomState;
+            const me = room.players.find(p => p.id === state.myPlayerId);
+            if (!me || room.players[room.turnIndex].id !== me.id || room.turnPhase !== 'DRAW') return;
+
+            if (room.stock.length === 0) {
+                endRoundStockEmpty(room);
+                return;
+            }
+
+            const drawnCard = room.stock.pop();
+            drawnCard.justDrawn = true;
+            me.hand.push(drawnCard);
+
+            room.turnPhase = 'ACTION';
+            room.actionLog = `${me.name} mengambil 1 kartu dari Stock Pile.`;
+            audio.playFlip();
+
+            updateRoomState(room);
+        }
+
+        // DRAW FROM DISCARD PILE WITH TARGET
+        function drawFromDiscardWithMeld() {
+            let room = state.localRoomState;
+            const me = room.players.find(p => p.id === state.myPlayerId);
+            if (!me || room.players[room.turnIndex].id !== me.id || room.turnPhase !== 'DRAW') return;
+
+            const targetIdx = state.selectedDiscardIndex; // 0 = Ke-1 (Top), 1 = Ke-2, 2 = Ke-3
+
+            // Enforce player count limits on target index
+            const maxAllowedIndex = room.numPlayers === 2 ? 0 : (room.numPlayers === 3 ? 1 : 2);
+            if (targetIdx > maxAllowedIndex) {
+                showToast(`Target Kartu Ke-${targetIdx + 1} tidak diperbolehkan untuk mode ${room.numPlayers} pemain!`, 'error');
+                return;
+            }
+
+            const visibleCards = room.discardPile.slice(-3);
+            const numVisible = visibleCards.length;
+
+            if (targetIdx >= numVisible) {
+                showToast("Kartu target tidak tersedia di Discard Pile!", 'error');
+                return;
+            }
+
+            // Target card in visibleCards array
+            const targetCardInVisible = visibleCards[numVisible - 1 - targetIdx];
+
+            // Selected cards from hand
+            const selectedHandCards = me.hand.filter(c => state.selectedCardIds.includes(c.id));
+            if (selectedHandCards.length < 2) {
+                showToast("Pilih minimal 2 kartu dari tangan yang cocok dengan kartu target!", 'error');
+                return;
+            }
+
+            const testMeldCards = [...selectedHandCards, targetCardInVisible];
+            const validMeldType = validateMeld(testMeldCards, playerHasLaidMeld(room, me.id));
+
+            if (!validMeldType) {
+                showToast("Kombinasi kartu target & tangan TIDAK VALID!", 'error');
+                return;
+            }
+
+            // Process Pickup
+            const cardsToTakeCount = targetIdx + 1; // 1, 2, or 3 cards
+            const takenCards = room.discardPile.splice(-cardsToTakeCount);
+
+            // Target card goes into meld with selectedHandCards
+            const actualTargetCard = takenCards[takenCards.length - 1 - targetIdx];
+            const actualMeldCards = [...selectedHandCards, actualTargetCard];
+
+            // Remove selected hand cards from player hand
+            me.hand = me.hand.filter(c => !state.selectedCardIds.includes(c.id));
+
+            // Any non-target cards taken from discard pile enter player hand
+            takenCards.forEach(c => {
+                if (c.id !== actualTargetCard.id) me.hand.push(c);
+            });
+
+            // Add new table meld
+            room.tableMelds.push({
+                id: 'M_' + Date.now(),
+                ownerId: me.id,
+                type: validMeldType,
+                cards: actualMeldCards
+            });
+
+            state.selectedCardIds = [];
+            room.turnPhase = 'ACTION';
+            room.actionLog = `${me.name} mengambil ${cardsToTakeCount} kartu dari Discard Pile dan merilis Meld!`;
+            audio.playMeld();
+
+            updateRoomState(room);
+        }
+
+        // SUBMIT MELD FROM SELECTED CARDS IN HAND
+        function submitMeldFromSelected() {
+            let room = state.localRoomState;
+            const me = room.players.find(p => p.id === state.myPlayerId);
+            if (!me || room.players[room.turnIndex].id !== me.id || room.turnPhase !== 'ACTION') return;
+
+            const selectedCards = me.hand.filter(c => state.selectedCardIds.includes(c.id));
+            if (selectedCards.length < 3) {
+                showToast("Pilih minimal 3 kartu untuk membentuk Meld!", 'error');
+                return;
+            }
+
+            const validMeldType = validateMeld(selectedCards, playerHasLaidMeld(room, me.id));
+            if (!validMeldType) {
+                showToast("Kombinasi Meld TIDAK VALID sesuai aturan!", 'error');
+                return;
+            }
+
+            // Remove cards from hand
+            me.hand = me.hand.filter(c => !state.selectedCardIds.includes(c.id));
+
+            // Add table meld
+            room.tableMelds.push({
+                id: 'M_' + Date.now(),
+                ownerId: me.id,
+                type: validMeldType,
+                cards: selectedCards
+            });
+
+            state.selectedCardIds = [];
+            room.actionLog = `${me.name} meletakkan Meld ${validMeldType} di meja!`;
+            audio.playMeld();
+
+            if (me.hand.length === 0) {
+                endRoundPentungWin(room, me, null);
+                return;
+            }
+
+            updateRoomState(room);
+        }
+
+        // DISCARD SELECTED CARD
+        function discardSelectedCard() {
+            let room = state.localRoomState;
+            const me = room.players.find(p => p.id === state.myPlayerId);
+            if (!me || room.players[room.turnIndex].id !== me.id || room.turnPhase !== 'ACTION') return;
+
+            if (state.selectedCardIds.length !== 1) {
+                showToast("Pilih tepat 1 kartu dari tangan untuk dibuang!", 'error');
+                return;
+            }
+
+            const cardToDiscard = me.hand.find(c => c.id === state.selectedCardIds[0]);
+            if (!cardToDiscard) return;
+
+            // Rule Check: Ace Discard Lock
+            const hasLaidMeld = playerHasLaidMeld(room, me.id);
+            if (cardToDiscard.val === 14 && !hasLaidMeld) {
+                showToast("LOCKED: Kartu As (A) TIDAK BISA dibuang sebelum meletakkan meld di meja!", 'error');
+                return;
+            }
+
+            // Rule Check: Intentionally Discarding Joker Penalty
+            if (cardToDiscard.isJoker) {
+                showToast("PENALTI: Membuang Joker dikenakan denda -50 Poin!", 'error');
+                if (room.scores) {
+                    room.scores[me.id] = (room.scores[me.id] || 0) - 50;
+                }
+            }
+
+            // Remove card from hand
+            me.hand = me.hand.filter(c => c.id !== cardToDiscard.id);
+            room.discardPile.push(cardToDiscard);
+            room.lastDiscarderId = me.id;
+            state.selectedCardIds = [];
+
+            // Check Win / Hand Empty
+            if (me.hand.length === 0) {
+                endRoundPentungWin(room, me, cardToDiscard);
+                return;
+            }
+
+            // Pass turn
+            room.turnIndex = (room.turnIndex + 1) % room.players.length;
+            room.turnPhase = 'DRAW';
+            room.actionLog = `${me.name} membuang ${cardToDiscard.symbol} ${cardToDiscard.label}. Giliran ${room.players[room.turnIndex].name}.`;
+            audio.playDiscard();
+
+            updateRoomState(room);
+        }
+
+        // VALIDATE MELD COMBINATION
+        function validateMeld(cards, hasExistingMeld) {
+            if (cards.length < 3) return null;
+
+            // 1. Check Ace Special Sets
+            const allAces = cards.every(c => c.val === 14 && !c.isJoker);
+            if (allAces) {
+                if (cards.length === 3) {
+                    return hasExistingMeld ? 'Set As (A-A-A)' : null; // 3 Aces require existing table meld
+                }
+                if (cards.length === 4) {
+                    return 'Set 4 As (A-A-A-A)'; // 4 Aces can be laid down immediately
+                }
+                return null;
+            }
+
+            // No Jokers allowed for Ace sets
+            if (cards.some(c => c.val === 14)) return null;
+
+            // 2. Check Face Run (J-Q-K)
+            const hasFaceRank = cards.some(c => c.val >= 11 && c.val <= 13);
+            if (hasFaceRank) {
+                if (cards.length !== 3) return null;
+                if (cards.some(c => c.isJoker)) return null; // NO Jokers allowed in Face Runs!
+
+                const suit = cards[0].suit;
+                if (!cards.every(c => c.suit === suit)) return null;
+
+                const sortedVals = cards.map(c => c.val).sort((a, b) => a - b);
+                if (sortedVals[0] === 11 && sortedVals[1] === 12 && sortedVals[2] === 13) {
+                    return 'Run Gambar (J-Q-K)';
+                }
+                return null;
+            }
+
+            // 3. Check Number Run (2-10)
+            const suitCounts = {};
+            cards.forEach(c => {
+                if (!c.isJoker) suitCounts[c.suit] = (suitCounts[c.suit] || 0) + 1;
+            });
+
+            // Must belong to single suit (excluding Jokers)
+            const suits = Object.keys(suitCounts);
+            if (suits.length > 1) return null;
+
+            // Ensure natural cards are consecutive within 2-10
+            const naturalVals = cards.filter(c => !c.isJoker).map(c => c.val).sort((a, b) => a - b);
+            const numJokers = cards.filter(c => c.isJoker).length;
+
+            if (naturalVals.some(v => v < 2 || v > 10)) return null;
+
+            // Verify if sequence can be formed with Jokers
+            let gaps = 0;
+            for (let i = 0; i < naturalVals.length - 1; i++) {
+                const diff = naturalVals[i + 1] - naturalVals[i];
+                if (diff === 0) return null; // Duplicate rank in run invalid
+                gaps += (diff - 1);
+            }
+
+            if (gaps <= numJokers) {
+                return 'Run Angka (2–10)';
+            }
+
+            return null;
+        }
+
+        // TIMER & TIMEOUT AUTOMATION
+        function resetTurnTimer() {
+            stopTurnTimer();
+            state.turnTimeRemaining = 20;
+            updateTimerDisplay();
+
+            state.turnTimer = setInterval(() => {
+                state.turnTimeRemaining -= 1;
+                updateTimerDisplay();
+
+                if (state.turnTimeRemaining <= 0) {
+                    stopTurnTimer();
+                    handleTurnTimeout();
+                }
+            }, 1000);
+        }
+
+        function stopTurnTimer() {
+            if (state.turnTimer) {
+                clearInterval(state.turnTimer);
+                state.turnTimer = null;
+            }
+        }
+
+        function updateTimerDisplay() {
+            const badge = document.getElementById('timerText');
+            const bar = document.getElementById('timerProgressBar');
+            if (badge) badge.innerText = state.turnTimeRemaining + 's';
+            if (bar) {
+                const pct = (state.turnTimeRemaining / 20) * 100;
+                bar.style.width = pct + '%';
+                if (state.turnTimeRemaining <= 5) {
+                    bar.className = 'bg-rose-500 h-full w-full transition-all duration-1000 ease-linear';
+                } else if (state.turnTimeRemaining <= 10) {
+                    bar.className = 'bg-yellow-500 h-full w-full transition-all duration-1000 ease-linear';
+                } else {
+                    bar.className = 'bg-emerald-500 h-full w-full transition-all duration-1000 ease-linear';
+                }
+            }
+        }
+
+        function handleTurnTimeout() {
+            let room = state.localRoomState;
+            if (!room || room.status !== 'PLAYING') return;
+
+            const activePlayer = room.players[room.turnIndex];
+            if (activePlayer.id !== state.myPlayerId) return;
+
+            showToast("Waktu giliran habis! Melakukan aksi otomatis.", 'error');
+
+            if (room.turnPhase === 'DRAW') {
+                if (room.stock.length > 0) {
+                    activePlayer.hand.push(room.stock.pop());
+                    room.turnPhase = 'ACTION';
+                }
+            }
+
+            // Automatic Discard
+            if (room.turnPhase === 'ACTION' && activePlayer.hand.length > 0) {
+                const hasLaidMeld = playerHasLaidMeld(room, activePlayer.id);
+                let validDiscards = activePlayer.hand;
+                if (!hasLaidMeld) {
+                    validDiscards = activePlayer.hand.filter(c => c.val !== 14);
+                }
+                if (validDiscards.length === 0) validDiscards = activePlayer.hand;
+
+                const cardToDiscard = validDiscards[0];
+                const cardIdx = activePlayer.hand.findIndex(c => c.id === cardToDiscard.id);
+                if (cardIdx > -1) activePlayer.hand.splice(cardIdx, 1);
+
+                room.discardPile.push(cardToDiscard);
+                room.lastDiscarderId = activePlayer.id;
+
+                room.turnIndex = (room.turnIndex + 1) % room.players.length;
+                room.turnPhase = 'DRAW';
+                room.actionLog = `⏰ Waktu habis! ${activePlayer.name} membuang ${cardToDiscard.symbol} ${cardToDiscard.label}.`;
+                audio.playDiscard();
+
+                updateRoomState(room);
+            }
+        }
+
+        // SMART BOT AI TURN AUTOMATION
+        function handleBotTurn(bot) {
+            let room = state.localRoomState;
+            if (!room || room.status !== 'PLAYING') return;
+
+            if (room.turnPhase === 'DRAW') {
+                if (room.stock.length > 0) {
+                    bot.hand.push(room.stock.pop());
+                    room.turnPhase = 'ACTION';
+                    room.actionLog = `${bot.name} mengambil kartu dari Stock Pile.`;
+                } else {
+                    endRoundStockEmpty(room);
+                    return;
+                }
+            }
+
+            if (room.turnPhase === 'ACTION') {
+                const hasLaidMeld = playerHasLaidMeld(room, bot.id);
+                let safeDiscards = bot.hand;
+                if (!hasLaidMeld) {
+                    safeDiscards = bot.hand.filter(c => c.val !== 14);
+                }
+                if (safeDiscards.length === 0) safeDiscards = bot.hand;
+
+                const cardToDiscard = safeDiscards[0];
+                const cIdx = bot.hand.findIndex(c => c.id === cardToDiscard.id);
+                if (cIdx > -1) bot.hand.splice(cIdx, 1);
+
+                room.discardPile.push(cardToDiscard);
+                room.lastDiscarderId = bot.id;
+
+                if (bot.hand.length === 0) {
+                    endRoundPentungWin(room, bot, cardToDiscard);
+                    return;
+                }
+
+                room.turnIndex = (room.turnIndex + 1) % room.players.length;
+                room.turnPhase = 'DRAW';
+                room.actionLog = `${bot.name} membuang ${cardToDiscard.symbol} ${cardToDiscard.label}. Giliran ${room.players[room.turnIndex].name}.`;
+
+                updateRoomState(room);
+            }
+        }
+
+        function playerHasLaidMeld(room, playerId) {
+            if (!room.tableMelds) return false;
+            return room.tableMelds.some(m => m.ownerId === playerId);
+        }
+
+        // ROUND FINISH & SCORING SUMMARY
+        function endRoundPentungWin(room, winner, lastDiscardedCard) {
+            audio.playPentung();
+            room.status = 'ROUND_OVER';
+
+            // Check Pentung Discard Penalty
+            let pentungPenalty = 0;
+            let discarderPlayer = null;
+
+            if (lastDiscardedCard && room.lastDiscarderId && room.lastDiscarderId !== winner.id) {
+                discarderPlayer = room.players.find(p => p.id === room.lastDiscarderId);
+                if (lastDiscardedCard.isJoker) pentungPenalty = -250;
+                else if (lastDiscardedCard.val === 14) pentungPenalty = -150;
+                else if (lastDiscardedCard.val >= 11) pentungPenalty = -100;
+                else pentungPenalty = -50;
+
+                if (discarderPlayer && room.scores) {
+                    room.scores[discarderPlayer.id] = (room.scores[discarderPlayer.id] || 0) + pentungPenalty;
+                }
+            }
+
+            // Calculate Round Points
+            let summaryHTML = '';
+            let roomWinnerDeclared = null;
+
+            room.players.forEach(p => {
+                const ptsDetails = calculatePlayerScoreDetails(p, room);
+                const prevScore = room.scores[p.id] || 0;
+                const newTotal = prevScore + ptsDetails.netScore;
+                room.scores[p.id] = newTotal;
+
+                if (newTotal >= room.targetScore) {
+                    roomWinnerDeclared = p;
+                }
+
+                summaryHTML += `
+                    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl">${p.avatar}</span>
+                            <div>
+                                <span class="font-bold text-amber-300 block">${p.name} ${p.id === winner.id ? '👑 (PEMENANG)' : ''}</span>
+                                <span class="text-[10px] text-slate-400">Meja: +${ptsDetails.tablePlusPts} | Tangan: -${ptsDetails.handMinusPts}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold font-mono text-amber-400 text-sm block">${ptsDetails.netScore >= 0 ? '+' : ''}${ptsDetails.netScore} Pts</span>
+                            <span class="text-[10px] text-slate-400">Total: ${newTotal} Pts</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (discarderPlayer && pentungPenalty < 0) {
+                summaryHTML += `
+                    <div class="bg-rose-950/80 p-2 rounded-xl border border-rose-500/50 text-rose-200 text-xs text-center font-bold">
+                        💥 PENTUNG! ${discarderPlayer.name} mendapat denda ${pentungPenalty} Pts!
+                    </div>
+                `;
+            }
+
+            document.getElementById('scoreTitle').innerText = roomWinnerDeclared ? `🏆 ${roomWinnerDeclared.name} JUARA ROOM!` : 'Ronde Selesai!';
+            document.getElementById('scoreSubtitle').innerText = `${winner.name} Menghabiskan Kartu (Pentung Win)!`;
+            document.getElementById('scoreBoardList').innerHTML = summaryHTML;
+            document.getElementById('scoreModal').classList.remove('hidden');
+
+            updateRoomState(room);
+        }
+
+        function endRoundStockEmpty(room) {
+            audio.playWin();
+            room.status = 'ROUND_OVER';
+
+            let summaryHTML = '';
+            room.players.forEach(p => {
+                const ptsDetails = calculatePlayerScoreDetails(p, room);
+                const prevScore = room.scores[p.id] || 0;
+                const newTotal = prevScore + ptsDetails.netScore;
+                room.scores[p.id] = newTotal;
+
+                summaryHTML += `
+                    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xl">${p.avatar}</span>
+                            <div>
+                                <span class="font-bold text-amber-300 block">${p.name}</span>
+                                <span class="text-[10px] text-slate-400">Meja: +${ptsDetails.tablePlusPts} | Tangan: -${ptsDetails.handMinusPts}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold font-mono text-amber-400 text-sm block">${ptsDetails.netScore >= 0 ? '+' : ''}${ptsDetails.netScore} Pts</span>
+                            <span class="text-[10px] text-slate-400">Total: ${newTotal} Pts</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            document.getElementById('scoreTitle').innerText = 'Stock Pile Habis!';
+            document.getElementById('scoreSubtitle').innerText = 'Perhitungan Poin Akhir Ronde';
+            document.getElementById('scoreBoardList').innerHTML = summaryHTML;
+            document.getElementById('scoreModal').classList.remove('hidden');
+
+            updateRoomState(room);
+        }
+
+        function calculatePlayerScoreDetails(player, room) {
+            let tablePlusPts = 0;
+            if (room.tableMelds) {
+                room.tableMelds.forEach(m => {
+                    if (m.ownerId === player.id) {
+                        m.cards.forEach(c => {
+                            if (c.isJoker) tablePlusPts += 5;
+                            else if (c.val === 14) tablePlusPts += 15;
+                            else if (c.val >= 11) tablePlusPts += 10;
+                            else tablePlusPts += 5;
+                        });
+                    }
+                });
+            }
+
+            let handMinusPts = 0;
+            let handPlusPts = 0;
+
+            if (player.hand) {
+                player.hand.forEach(c => {
+                    if (c.isJoker) handMinusPts += 25;
+                    else if (c.val === 14) handMinusPts += 15;
+                    else if (c.val >= 11) handMinusPts += 10;
+                    else handMinusPts += 5;
+                });
+            }
+
+            const netScore = tablePlusPts + handPlusPts - handMinusPts;
+            return {
+                tablePlusPts,
+                handPlusPts,
+                handMinusPts,
+                netScore
+            };
+        }
+
+        function nextRound() {
+            document.getElementById('scoreModal').classList.add('hidden');
+            let room = state.localRoomState;
+            if (!room) return;
+
+            room.roundNumber += 1;
+            let deck = createDeck();
+            const indicatorCard = deck.pop();
+            const jokerRankVal = indicatorCard.val;
+
+            deck.forEach(c => {
+                if (c.val === jokerRankVal) c.isJoker = true;
+            });
+
+            const cardsPerPlayer = getHandCardCount(room.players.length);
+            room.players.forEach(p => {
+                p.hand = deck.splice(0, cardsPerPlayer);
+            });
+
+            const firstDiscard = deck.pop();
+
+            room.stock = deck;
+            room.discardPile = [firstDiscard];
+            room.tableMelds = [];
+            room.indicatorJoker = indicatorCard;
+            room.turnIndex = (room.roundNumber - 1) % room.players.length;
+            room.turnPhase = 'DRAW';
+            room.status = 'PLAYING';
+            room.actionLog = `Ronde ${room.roundNumber} dimulai! Giliran ${room.players[room.turnIndex].name}.`;
+
+            updateRoomState(room);
+        }
+
+        function confirmLeaveRoom() {
+            showConfirmModal("Keluar Permainan", "Apakah Anda yakin ingin keluar dari permainan?", () => {
+                stopTurnTimer();
+                if (state.unsubscribeRoom) state.unsubscribeRoom();
+                location.reload();
+            });
+        }
+
+        function copyRoomCode() {
+            if (!state.roomCode) return;
+            const el = document.createElement('textarea');
+            el.value = state.roomCode;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            showToast("Kode Room berhasil disalin!", 'success');
+        }
+    </script>
+</body>
+</html>
